@@ -1,0 +1,35 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "contracts/TicketSeller.sol": {
+      "content": "// SPDX-License-Identifier: MIT\n\npragma solidity ^0.8.18;\n\ncontract TicketDistributor {\n\n    error EventCreationFeeNotMatching();\n    error NonExistingEvent();\n    error AlreadyHaveBoughtTicket();\n    error AmountFundedNotMatching();\n    error AllTicketsSold();\n\n    uint256 public immutable eventCreationFee;\n    uint256 public immutable ticketBuyingFee;\n    uint256 private s_index = 0;\n    mapping(uint256 => Event) public s_events;\n    \n    struct Event {\n        address creator;\n        string name;\n        uint256 totalTicketAmount;\n        uint256 ticketsSold;\n        uint256 ticketPrice;\n        mapping(address => bool) assistants;\n        bool active;\n    }\n\n    constructor(uint256 _eventCreationFee, uint256 _ticketBuyingFee) {\n        eventCreationFee = _eventCreationFee;\n        ticketBuyingFee = _ticketBuyingFee;\n    }\n\n    function createEvent(string memory _name, uint256 _totalTicketAmount, uint256 _ticketPrice) public payable {\n        if(msg.value!=eventCreationFee){\n            revert EventCreationFeeNotMatching();\n        }\n        Event storage new_event = s_events[s_index];\n        s_index++;\n        new_event.creator = msg.sender;\n        new_event.name = _name;\n        new_event.totalTicketAmount = _totalTicketAmount;\n        new_event.ticketsSold = 0;\n        new_event.ticketPrice = _ticketPrice;\n        new_event.active = true;\n    }\n\n    function buyTicket(uint256 _index) public payable {\n        if(!s_events[_index].active){\n            revert NonExistingEvent();\n        }\n        if(s_events[_index].assistants[msg.sender]){\n            revert AlreadyHaveBoughtTicket();\n        }\n        if(s_events[_index].totalTicketAmount<=s_events[_index].ticketsSold){\n            revert AllTicketsSold();\n        }\n        if(msg.value!=(ticketBuyingFee+s_events[_index].ticketPrice)){\n            revert AmountFundedNotMatching();\n        }\n        s_events[_index].ticketsSold++;\n        s_events[_index].assistants[msg.sender] = true;\n    }\n\n    function checkAssistant(uint256 _index, address _assistant) public view returns(bool){\n        return s_events[_index].assistants[_assistant];\n    }\n}"
+    }
+  },
+  "settings": {
+    "optimizer": {
+      "enabled": false,
+      "runs": 200
+    },
+    "outputSelection": {
+      "*": {
+        "*": [
+          "abi",
+          "evm.bytecode",
+          "evm.deployedBytecode",
+          "evm.methodIdentifiers",
+          "metadata",
+          "devdoc",
+          "userdoc",
+          "storageLayout",
+          "evm.gasEstimates"
+        ],
+        "": [
+          "ast"
+        ]
+      }
+    },
+    "metadata": {
+      "useLiteralContent": true
+    }
+  }
+}
