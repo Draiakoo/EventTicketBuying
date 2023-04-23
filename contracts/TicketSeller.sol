@@ -11,17 +11,26 @@ contract TicketDistributor {
     error AmountFundedNotMatching();
     error AllTicketsSold();
     error NotEventCreator();
+    error NotContractOwner();
+    error NotCreatorOfTheEvent();
+    error EventStillActive();
+    error NoFundsToWithdraw();
 
     /*Events*/
     event EventCreated(uint256 indexed index, string indexed name);
     event EventFinished(uint256 indexed index, string indexed name);
     event TicketBought(uint256 indexed index, string indexed name, address indexed buyer);
+    event OwnerWithdraw(uint256 indexed events, uint256 indexed tickets);
+    event EventFundWithdraw(uint256 indexed index, address indexed creator);
 
+    address private immutable i_owner;
     uint256 public immutable i_eventCreationFee;
     uint256 public immutable i_ticketBuyingFee;
+    uint256 public s_eventsCreated = 0;
+    uint256 public s_ticketsBought = 0;
     uint256 private s_index = 0;
     mapping(uint256 => Event) public s_events;
-    
+
     struct Event {
         address creator;
         string name;
@@ -33,8 +42,42 @@ contract TicketDistributor {
     }
 
     constructor(uint256 _eventCreationFee, uint256 _ticketBuyingFee) {
+        i_owner = msg.sender;
         i_eventCreationFee = _eventCreationFee;
         i_ticketBuyingFee = _ticketBuyingFee;
+    }
+
+    modifier onlyOwner() {
+        if(msg.sender!=i_owner) {
+            revert NotContractOwner();
+        }
+        _;
+    }
+
+    function withdrawOwnerFunds() public onlyOwner() {
+        uint256 totalFund = (s_eventsCreated * i_eventCreationFee) + (s_ticketsBought * i_ticketBuyingFee);
+        (bool success, ) = i_owner.call{value: totalFund}("");
+        require(success);
+        emit OwnerWithdraw(s_eventsCreated, s_ticketsBought);
+        s_eventsCreated = 0;
+        s_ticketsBought = 0;
+    }
+
+    function withdrawEventFunds(uint256 _index) public {
+        if(msg.sender!=s_events[_index].creator){
+            revert NotCreatorOfTheEvent();
+        }
+        if(s_events[_index].active==true){
+            revert EventStillActive();
+        }
+        if(s_events[_index].ticketsSold==0){
+            revert NoFundsToWithdraw();
+        }
+        uint256 totalFund = s_events[_index].ticketsSold * s_events[_index].ticketPrice;
+        (bool success, ) = i_owner.call{value: totalFund}("");
+        require(success);
+        s_events[_index].ticketsSold = 0;
+        emit EventFundWithdraw(_index, msg.sender);
     }
 
     function createEvent(string memory _name, uint256 _totalTicketAmount, uint256 _ticketPrice) public payable {
@@ -49,6 +92,7 @@ contract TicketDistributor {
         new_event.ticketsSold = 0;
         new_event.ticketPrice = _ticketPrice;
         new_event.active = true;
+        s_eventsCreated++;
         emit EventCreated(s_index-1, _name);
     }
 
@@ -75,6 +119,7 @@ contract TicketDistributor {
         }
         s_events[_index].ticketsSold++;
         s_events[_index].assistants[msg.sender] = true;
+        s_ticketsBought++;
         emit TicketBought(_index, s_events[_index].name, msg.sender);
     }
 

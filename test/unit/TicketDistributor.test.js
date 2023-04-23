@@ -124,5 +124,94 @@ const {developmentChains, networkConfig} = require("../../helper-hardhat-config"
                 await expect(deployerConnection.buyTicket("0",{value: ticketPrice})).to.be.revertedWith("AmountFundedNotMatching");
             })
         })
+
+        describe("Withdraw owner funds", function() {
+            it("revert if not the owner calls the function withdraw", async ()=> {
+                const buyer1Connection = ticketSeller.connect(buyer1);
+                await expect(buyer1Connection.withdrawOwnerFunds()).to.be.revertedWith("NotContractOwner");
+            })
+            it("check if withdraw owner funds match", async ()=> {
+                const ticketPrice = ethers.utils.parseEther("5");
+                const valueToSend = ticketPrice.add(ticketBuyingFee);
+
+                // Check starting balance
+                const startingOwnerBalance = await ethers.provider.getBalance(deployer.address);
+
+                // Buyer2 and Buyer3 buy a ticket of that event
+                const buyer2Connection = ticketSeller.connect(buyer2);
+                await buyer2Connection.buyTicket("0",{value: valueToSend});
+                const buyer3Connection = ticketSeller.connect(buyer3);
+                await buyer3Connection.buyTicket("0",{value: valueToSend});
+
+                // Owner calls withdraw function
+                const deployerConnection = ticketSeller.connect(deployer);
+                const transactionResponse = await deployerConnection.withdrawOwnerFunds();
+                const transactionReceipt = await transactionResponse.wait();
+                const { gasUsed, effectiveGasPrice } = transactionReceipt;
+                const gasCost = gasUsed.mul(effectiveGasPrice);
+
+                // Check final balance
+                const endingOwnerBalance = await ethers.provider.getBalance(deployer.address);
+
+                // Total amount funded
+                const amount = ethers.utils.parseUnits(eventCreationFee, "wei").add(ethers.utils.parseUnits(ticketBuyingFee, "wei").mul("2"));
+                const amountMinusGas = amount.sub(gasCost);
+
+                assert.equal(startingOwnerBalance.add(amountMinusGas).toString(), endingOwnerBalance.toString());
+            })
+        })
+
+        describe("Withdraw event creator funds", function() {
+            it("revert if not the caller of the function withdraw is not the event creator", async ()=> {
+                const buyer1Connection = ticketSeller.connect(buyer1);
+                await expect(buyer1Connection.withdrawEventFunds("0")).to.be.revertedWith("NotCreatorOfTheEvent");
+            })
+            it("revert if the event is still active", async ()=> {
+                const deployerConnection = ticketSeller.connect(deployer);
+                await expect(deployerConnection.withdrawEventFunds("0")).to.be.revertedWith("EventStillActive");
+            })
+            it("revert if the event has no funds", async ()=> {
+                const deployerConnection = ticketSeller.connect(deployer);
+                await deployerConnection.finishEvent("0");
+                await expect(deployerConnection.withdrawEventFunds("0")).to.be.revertedWith("NoFundsToWithdraw");
+            })
+            it("check if event creator funds match", async ()=> {
+                const ticketPrice = ethers.utils.parseEther("5");
+                const valueToSend = ticketPrice.add(ticketBuyingFee);
+
+                // Check starting balance
+                const startingCreatorBalance = await ethers.provider.getBalance(deployer.address);
+
+                // Buyer2 and Buyer3 buy a ticket of that event
+                const buyer2Connection = ticketSeller.connect(buyer2);
+                await buyer2Connection.buyTicket("0",{value: valueToSend});
+                const buyer3Connection = ticketSeller.connect(buyer3);
+                await buyer3Connection.buyTicket("0",{value: valueToSend});
+
+                // Finishing event
+                const deployerConnection = ticketSeller.connect(deployer);
+                const finishingResponse = await deployerConnection.finishEvent("0");
+                const finishingReceipt = await finishingResponse.wait();
+                const finishingGasUsed = finishingReceipt.gasUsed;
+                const finishingGasPrice = finishingReceipt.effectiveGasPrice;
+                const finishingGas = finishingGasUsed.mul(finishingGasPrice);
+
+                // Owner calls withdraw functioner);
+                const transactionResponse = await deployerConnection.withdrawEventFunds("0");
+                const transactionReceipt = await transactionResponse.wait();
+                const transactionGasUsed = transactionReceipt.gasUsed;
+                const transactionGasPrice = transactionReceipt.effectiveGasPrice;
+                const transactionGas = transactionGasUsed.mul(transactionGasPrice);
+
+                // Check final balance
+                const endingCreatorBalance = await ethers.provider.getBalance(deployer.address);
+
+                // Total amount funded
+                const amount = ticketPrice.mul("2");
+                const amountMinusGas = amount.sub(finishingGas).sub(transactionGas);
+
+                assert.equal(startingCreatorBalance.add(amountMinusGas).toString(), endingCreatorBalance.toString());
+            })
+        })
         })
     })

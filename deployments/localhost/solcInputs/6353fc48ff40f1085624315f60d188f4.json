@@ -1,0 +1,35 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "contracts/TicketSeller.sol": {
+      "content": "// SPDX-License-Identifier: MIT\n\npragma solidity ^0.8.18;\n\ncontract TicketDistributor {\n\n    /*Errors*/\n    error EventCreationFeeNotMatching();\n    error NonExistingEvent();\n    error AlreadyHaveBoughtTicket();\n    error AmountFundedNotMatching();\n    error AllTicketsSold();\n    error NotEventCreator();\n    error NotContractOwner();\n    error NotCreatorOfTheEvent();\n    error EventStillActive();\n    error NoFundsToWithdraw();\n\n    /*Events*/\n    event EventCreated(uint256 indexed index, string indexed name);\n    event EventFinished(uint256 indexed index, string indexed name);\n    event TicketBought(uint256 indexed index, string indexed name, address indexed buyer);\n    event OwnerWithdraw(uint256 indexed events, uint256 indexed tickets);\n    event EventFundWithdraw(uint256 indexed index, address indexed creator);\n\n    address private immutable i_owner;\n    uint256 public immutable i_eventCreationFee;\n    uint256 public immutable i_ticketBuyingFee;\n    uint256 public s_eventsCreated = 0;\n    uint256 public s_ticketsBought = 0;\n    uint256 private s_index = 0;\n    mapping(uint256 => Event) public s_events;\n\n    struct Event {\n        address creator;\n        string name;\n        uint256 totalTicketAmount;\n        uint256 ticketsSold;\n        uint256 ticketPrice;\n        mapping(address => bool) assistants;\n        bool active;\n    }\n\n    constructor(uint256 _eventCreationFee, uint256 _ticketBuyingFee) {\n        i_owner = msg.sender;\n        i_eventCreationFee = _eventCreationFee;\n        i_ticketBuyingFee = _ticketBuyingFee;\n    }\n\n    modifier onlyOwner() {\n        if(msg.sender!=i_owner) {\n            revert NotContractOwner();\n        }\n        _;\n    }\n\n    function withdrawOwnerFunds() public onlyOwner() {\n        uint256 totalFund = (s_eventsCreated * i_eventCreationFee) + (s_ticketsBought * i_ticketBuyingFee);\n        (bool success, ) = i_owner.call{value: totalFund}(\"\");\n        require(success);\n        emit OwnerWithdraw(s_eventsCreated, s_ticketsBought);\n        s_eventsCreated = 0;\n        s_ticketsBought = 0;\n    }\n\n    function withdrawEventFunds(uint256 _index) public {\n        if(msg.sender!=s_events[_index].creator){\n            revert NotCreatorOfTheEvent();\n        }\n        if(s_events[_index].active==true){\n            revert EventStillActive();\n        }\n        if(s_events[_index].ticketsSold==0){\n            revert NoFundsToWithdraw();\n        }\n        uint256 totalFund = s_events[_index].ticketsSold * s_events[_index].ticketPrice;\n        (bool success, ) = i_owner.call{value: totalFund}(\"\");\n        require(success);\n        s_events[_index].ticketsSold = 0;\n        emit EventFundWithdraw(_index, msg.sender);\n    }\n\n    function createEvent(string memory _name, uint256 _totalTicketAmount, uint256 _ticketPrice) public payable {\n        if(msg.value!=i_eventCreationFee){\n            revert EventCreationFeeNotMatching();\n        }\n        Event storage new_event = s_events[s_index];\n        s_index++;\n        new_event.creator = msg.sender;\n        new_event.name = _name;\n        new_event.totalTicketAmount = _totalTicketAmount;\n        new_event.ticketsSold = 0;\n        new_event.ticketPrice = _ticketPrice;\n        new_event.active = true;\n        s_eventsCreated++;\n        emit EventCreated(s_index-1, _name);\n    }\n\n    function finishEvent(uint256 _index) public{\n        if(s_events[_index].creator!=msg.sender){\n            revert NotEventCreator();\n        }\n        s_events[_index].active = false;\n        emit EventFinished(_index, s_events[_index].name);\n    }\n\n    function buyTicket(uint256 _index) public payable {\n        if(!s_events[_index].active){\n            revert NonExistingEvent();\n        }\n        if(s_events[_index].assistants[msg.sender]){\n            revert AlreadyHaveBoughtTicket();\n        }\n        if(s_events[_index].totalTicketAmount<=s_events[_index].ticketsSold){\n            revert AllTicketsSold();\n        }\n        if(msg.value!=(i_ticketBuyingFee+s_events[_index].ticketPrice)){\n            revert AmountFundedNotMatching();\n        }\n        s_events[_index].ticketsSold++;\n        s_events[_index].assistants[msg.sender] = true;\n        s_ticketsBought++;\n        emit TicketBought(_index, s_events[_index].name, msg.sender);\n    }\n\n    function checkAssistant(uint256 _index, address _assistant) public view returns(bool){\n        return s_events[_index].assistants[_assistant];\n    }\n}"
+    }
+  },
+  "settings": {
+    "optimizer": {
+      "enabled": false,
+      "runs": 200
+    },
+    "outputSelection": {
+      "*": {
+        "*": [
+          "abi",
+          "evm.bytecode",
+          "evm.deployedBytecode",
+          "evm.methodIdentifiers",
+          "metadata",
+          "devdoc",
+          "userdoc",
+          "storageLayout",
+          "evm.gasEstimates"
+        ],
+        "": [
+          "ast"
+        ]
+      }
+    },
+    "metadata": {
+      "useLiteralContent": true
+    }
+  }
+}
