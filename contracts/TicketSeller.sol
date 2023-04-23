@@ -15,6 +15,8 @@ contract TicketDistributor {
     error NotCreatorOfTheEvent();
     error EventStillActive();
     error NoFundsToWithdraw();
+    error DontOwnATicketToTransfer();
+    error ReceiverAlreadyHaveTicket();
 
     /*Events*/
     event EventCreated(uint256 indexed index, string indexed name);
@@ -121,6 +123,17 @@ contract TicketDistributor {
         s_events[_index].assistants[msg.sender] = true;
         s_ticketsBought++;
         emit TicketBought(_index, s_events[_index].name, msg.sender);
+    }
+
+    function transferTicket(uint256 _index, address _receiver) public {
+        if(!s_events[_index].assistants[msg.sender]){
+            revert DontOwnATicketToTransfer();
+        }
+        if(s_events[_index].assistants[_receiver]){
+            revert ReceiverAlreadyHaveTicket();
+        }
+        s_events[_index].assistants[msg.sender] = false;
+        s_events[_index].assistants[_receiver] = true;
     }
 
     function checkAssistant(uint256 _index, address _assistant) public view returns(bool){

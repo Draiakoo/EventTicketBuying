@@ -213,5 +213,39 @@ const {developmentChains, networkConfig} = require("../../helper-hardhat-config"
                 assert.equal(startingCreatorBalance.add(amountMinusGas).toString(), endingCreatorBalance.toString());
             })
         })
+
+        describe("Transfer the ticket succesfully", function() {
+            it("revert if the caller of the function doesn't own a ticket", async ()=> {
+                const buyer1Connection = ticketSeller.connect(buyer1);
+                await expect(buyer1Connection.transferTicket("0", buyer2.address)).to.be.revertedWith("DontOwnATicketToTransfer");
+            })
+            it("revert if the receiver already own a ticket", async ()=> {
+                const ticketPrice = ethers.utils.parseEther("5");
+                const valueToSend = ticketPrice.add(ticketBuyingFee);
+
+                const buyer1Connection = ticketSeller.connect(buyer1);
+                await buyer1Connection.buyTicket("0",{value: valueToSend});
+
+                const buyer2Connection = ticketSeller.connect(buyer2);
+                await buyer2Connection.buyTicket("0",{value: valueToSend});
+
+                await expect(buyer1Connection.transferTicket("0", buyer2.address)).to.be.revertedWith("ReceiverAlreadyHaveTicket");
+            })
+            it("ticket transfer works properly", async ()=> {
+                const ticketPrice = ethers.utils.parseEther("5");
+                const valueToSend = ticketPrice.add(ticketBuyingFee);
+
+                const buyer1Connection = ticketSeller.connect(buyer1);
+                await buyer1Connection.buyTicket("0",{value: valueToSend});
+
+                await buyer1Connection.transferTicket("0", buyer2.address);
+
+                const buyer1Ticket = await ticketSeller.checkAssistant("0", buyer1.address);
+                const buyer2Ticket = await ticketSeller.checkAssistant("0", buyer2.address);
+
+                assert.equal(buyer1Ticket, false);
+                assert.equal(buyer2Ticket, true);
+            })
+        })
         })
     })
